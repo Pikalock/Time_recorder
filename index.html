@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Time Recorder</title>
+<style>
+    body {
+        font-family: 'Roboto', sans-serif;
+        text-align: center;
+        margin: 0;
+        padding: 0;
+    }
+    h1 {
+        color: #333;
+        margin-top: 20px;
+    }
+    .input-container {
+        margin-top: 20px;
+        display: flex;
+        justify-content: center;
+    }
+    #taskInput {
+        padding: 10px;
+        border: 2px solid #ccc;
+        border-radius: 5px;
+        font-size: 16px;
+        margin-right: 10px;
+        width: 300px;
+    }
+    .button-container {
+        margin-top: 10px;
+    }
+    button {
+        padding: 10px 20px;
+        border: none;
+        border-radius: 5px;
+        font-size: 16px;
+        cursor: pointer;
+        margin: 0 5px;
+    }
+    .button-green {
+        background-color: #4CAF50;
+        color: white;
+    }
+    .button-green:hover {
+        background-color: #45a049;
+    }
+    .button-black {
+        background-color: #333;
+        color: white;
+    }
+    .button-black:hover {
+        background-color: #222;
+    }
+    .theme-container {
+        display: flex;
+        justify-content: center;
+        margin-top: 10px;
+    }
+    .theme-button {
+        padding: 5px 10px;
+        border: none;
+        border-radius: 5px;
+        font-size: 14px;
+        cursor: pointer;
+        margin: 0 5px;
+    }
+    .theme-white {
+        background-color: #efeee7d5;
+        color: #333;
+    }
+    .theme-green {
+        background-color: hsla(92, 90%, 56%, 0.867);
+        color: white;
+    }
+    .theme-black {
+        background-color: #0000009c;
+        color: white;
+    }
+    .event {
+        margin-top: 20px;
+    }
+    .timeline {
+        display: flex;
+        justify-content: center;
+        margin-top: 20px;
+    }
+    .task {
+        padding: 10px;
+        margin: 10px;
+        border-radius: 10px;
+    }
+
+    canvas {
+        max-width: 85%;
+    }
+    .task {
+        position: relative;
+        padding: 10px;
+        margin: 10px;
+        border-radius: 10px;
+        display: flex;
+        justify-content: space-between;
+    }
+
+    .task:hover {
+        cursor: pointer;
+    }
+
+    .delete-icon {
+        color: red;
+        margin-left: 10px;
+    }
+</style>
+</head>
+<body>
+    <h1>Time recorder</h1>
+    <div class="theme-container">
+        <button class="theme-button theme-white" onclick="changeTheme('theme-white')">White Theme</button>
+        <button class="theme-button theme-green" onclick="changeTheme('theme-green')">Green Theme</button>
+        <button class="theme-button theme-black" onclick="changeTheme('theme-black')">Black Theme</button>
+    </div>
+    <div class="input-container">
+        <input type="text" id="taskInput" placeholder="Add things you want to record...">
+    </div>
+    <div class="button-container">
+        <button class="button-green" onclick="startTimer()">Start</button>
+        <button class="button-green" onclick="pauseTimer()">Pause</button>
+        <button class="button-green" onclick="stopTimer()">Stop</button>
+        <button class="button-black" onclick="exportEvents()">Export Events</button>
+    </div>
+
+    <p id="status"></p>
+    <div id="events" class="event"></div>
+    <div id="timeline" class="timeline"></div>
+    
+    <script>
+    let events = []; // 提前初始化 events 数组
+
+    function generateCharts() {
+    // 生成数据表
+        const dataTable = document.getElementById('data-table');
+        dataTable.innerHTML = '';
+
+        const table = document.createElement('table');
+        table.border = '1';
+
+        const headerRow = table.insertRow();
+        headerRow.innerHTML = '<th>Task</th><th>Start Time</th><th>End Time</th><th>Duration</th>';
+
+    // 确保 events 数组有数据时才进行操作
+        if (events.length > 0) {
+            const labels = events.map(event => event.task);
+            const durations = events.map(event => event.duration);
+
+            const timeRatioChart = new Chart(document.getElementById('timeRatioChart').getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Duration',
+                        data: durations,
+                        backgroundColor: 'rgba(54, 162, 235, 0.6)',
+                        borderColor: 'rgba(54, 162, 235, 1)'
+                    }]
+                },
+                options: {
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+
+            const timeDurationChart = new Chart(document.getElementById('timeDurationChart').getContext('2d'), {
+                type: 'pie',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: durations,
+                        backgroundColor: [
+                            'rgba(255, 99, 132, 0.6)',
+                            'rgba(54, 162, 235, 0.6)',
+                            'rgba(255, 206, 86, 0.6)',
+                            'rgba(75, 192, 192, 0.6)',
+                            'rgba(153, 102, 255, 0.6)',
+                        ],
+                        hoverOffset: 4
+                    }]
+                }
+            });
+        }
+    }
+
+let currentEvent = null;
+let startTime = null;
+let timerInterval = null;
+
+function startTimer() {
+    const taskInput = document.getElementById('taskInput');
+    const task = taskInput.value;
+
+    if (task.trim() === '') {
+        alert('Please enter the task');
+        return;
+    }
+
+    if (currentEvent) {
+        stopTimer();
+    }
+
+    currentEvent = {
+        task: task,
+        startTime: new Date()
+    };
+
+    events.push(currentEvent);
+    startTime = new Date();
+
+    timerInterval = setInterval(updateTimerDisplay, 1000); // 每秒更新
+    updateTimerDisplay(); // 初始化更新
+
+    document.getElementById('status').textContent = 'Timer started';
+}
+
+function updateTimerDisplay() {
+    if (startTime) {
+        const elapsedSeconds = Math.floor((new Date() - startTime) / 1000);
+        document.getElementById('status').textContent = `Timer started - Elapsed time: ${elapsedSeconds} seconds`;
+    }
+}
+
+
+function pauseTimer() {
+    clearInterval(timerInterval);
+    document.getElementById('status').textContent = 'Timer paused';
+}
+
+function stopTimer() {
+    if (currentEvent) {
+        currentEvent.endTime = new Date();
+        currentEvent.duration = Math.round((currentEvent.endTime - currentEvent.startTime) / 1000); // 计算持续秒数
+        currentEvent.durationDisplay = formatDuration(currentEvent.duration);
+
+        currentEvent.color = getRandomColor();
+
+        currentEvent.endTimeDisplay = currentEvent.endTime.toLocaleTimeString();
+
+        currentEvent = null;
+        startTime = null;
+        clearInterval(timerInterval);
+
+        updateEventsDisplay();
+        updateTimeline();
+
+        document.getElementById('status').textContent = 'Timer stopped';
+    }
+}
+
+function updateEventsDisplay() {
+    const eventsDiv = document.getElementById('events');
+    eventsDiv.innerHTML = '';
+    events.forEach(event => {
+        const eventElement = document.createElement('div');
+        eventElement.textContent = `${event.task} (${event.durationDisplay}) - Start time: ${event.startTime.toLocaleTimeString()}, End time: ${event.endTimeDisplay}`;
+        eventElement.className = 'task';
+        eventElement.style.backgroundColor = event.color;
+        eventsDiv.appendChild(eventElement);
+    });
+}
+
+function updateTimeline() {
+    const timelineDiv = document.getElementById('timeline');
+    timelineDiv.innerHTML = '';
+    events.forEach(event => {
+        const bar = document.createElement('div');
+        bar.className = 'bar';
+        bar.style.height = `${event.duration}px`; // 高度按秒计算
+        bar.style.backgroundColor = event.color;
+        timelineDiv.appendChild(bar);
+    });
+}
+
+
+function formatDuration(duration) {
+    const hours = Math.floor(duration / 3600000);
+    const minutes = Math.floor((duration % 3600000) / 60000);
+    return `${hours}h ${minutes}m`;
+}
+
+function getRandomColor() {
+    return '#' + Math.floor(Math.random() * 16777215).toString(16);
+}
+
+function exportEvents() {
+    const data = JSON.stringify(events, null, 2);
+    
+    var table = '<table border="1">';
+    table += '<tr><th>Task</th><th>Duration</th><th>Start Time</th><th>End Time</th></tr>';
+
+    events.forEach(event => {
+        table += `<tr><td>${event.task}</td><td>${event.durationDisplay}</td><td>${event.startTime.toLocaleTimeString()}</td><td>${event.endTimeDisplay}</td></tr>`;
+    });
+
+    table += '</table>';
+
+    const blob = new Blob([data + '\n\n' + table], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'events_data.html';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+}
+
+
+function changeTheme(theme) {
+    document.body.className = theme;
+}
+
+generateCharts();
+
+document.getElementById('events').addEventListener('contextmenu', function (event) {
+    event.preventDefault();
+    if (event.target.classList.contains('task')) {
+        const taskName = event.target.querySelector('.task-name').textContent.trim();
+        events = events.filter(event => event.task !== taskName);
+        updateEventsDisplay();
+        updateTimeline();
+    }
+});
+
+        // 初始化事件显示
+updateEventsDisplay();
+
+        // 更新事件显示的函数
+function updateEventsDisplay() {
+    const eventsDiv = document.getElementById('events');
+    eventsDiv.innerHTML = '';
+    events.forEach((event, index) => {
+        const eventElement = document.createElement('div');
+        eventElement.textContent = `Task: ${event.task} (Duration: ${event.durationDisplay}) - Start time: ${event.startTime.toLocaleString()}, End time: ${event.endTimeDisplay}`;
+        eventElement.className = 'task';
+        const taskName = document.createElement('span');
+        taskName.textContent = event.task;
+        taskName.className = 'task-name';
+        const deleteIcon = document.createElement('span');
+        deleteIcon.innerHTML = '&#10060;'; // Unicode for X mark
+        deleteIcon.className = 'delete-icon';
+        deleteIcon.addEventListener('click', () => {
+            events.splice(index, 1);
+            updateEventsDisplay();
+            updateTimeline();
+        });
+        eventElement.appendChild(taskName);
+        eventElement.appendChild(deleteIcon);
+        eventElement.style.backgroundColor = event.color;
+        eventsDiv.appendChild(eventElement);
+                
+    });
+                
+}
+
+</script>
+</body>
+</html>
